@@ -10,7 +10,7 @@ qiime tools import
 --input-path rdu_soil_manifest.txt  
 --input-format PairedEndFastqManifestPhred33V2  
 --output-path rdu_soil.qza
-#Looking at sequence quality to deterime truncation length  
+#Looking at sequence quality   
 qiime demux summarize  
 --i-data rdu_soil.qza
 --o-visualization rdu_soil.qzv
@@ -27,7 +27,8 @@ qiime demux summarize
 --i-data rdu_soil_No_Primers.qza  
 --o-visualization RDU_Soil_NoPrimers.qzv
 
-#PEAR is going to be used to merge sequences and see if that increases quality
+#PEAR is going to be used to merge sequences and see if that increases quality, this was submitted as a job 
+
 #!/bin/bash 
 cd /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/Fastq/
 samples=$(ls /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/Fastq/ | cut -d_ -f1 | sort | uniq) 
@@ -37,22 +38,20 @@ do
 done
 
 # concatenate the fastq
-cat *.assembled.fastq > assembled_and_concatenated.fastq
+cat *.assembled.fastq > rdu_merged_for_usearch.fastq
+
 # use fastqc to look at quality 
 conda activate fastqc
-for i in /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/RDU_Soil/Merged/*.assembled.fastq
+for i in /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/RDU_Soil/Merged/*.usearch.fastq
 do
 fastqc -o /mnt/home/sowalass/RalieghSoilMicrobiomes/fastq_assembled/ $i 
 done 
-#Use USEARCh to truncate 
-#Use USEARCH to check ee of reads merged with PEAR before denoising
+#Use USEARCH to check ee of reads merged with PEAR before denoising, there is a drop % passing through filter at ~290bp 
 /mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 
 -fastq_eestats2 /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/rdu_merged_for_usearch.fastq 
 -length_cutoffs 100,500,1
-
  
-#Denoising data with different settings to maxamize read length and 
-
+#Denoising data with different settings to maxamize read length and maxamize sequences
 /mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 \
 		-fastq_filter /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/rdu_merged_for_usearch.fastq \
 		-fastq_maxee 1.0 \
@@ -98,7 +97,7 @@ done
 module load Conda/3
 conda activate fastqc
 
-fastqc \
+	fastqc \
 		/mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_430bp_maxee_1.fastq \
 		/mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_280bp_maxee_05.fastq \
 		/mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_280bp_maxee_1.fastq \
@@ -113,10 +112,11 @@ fastqc \
     
 #looking at ee in each of these files, I only chose the two with the highest sequencing retention
 /mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 
--fastq_eestats2 /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_200bp_maxee_1.fastq -length_cutoffs 100,200,1 \
+-fastq_eestats2 /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_200bp_maxee_1.fastq 
+-length_cutoffs 100,200,1 \
 /mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 
--fastq_eestats2 /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_280bp_maxee_1.fastq -length_cutoffs 100,200,1
-
+-fastq_eestats2 /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_280bp_maxee_1.fastq 
+-length_cutoffs 100,200,1
 		
 #finding abundance of unique reads, I decided to use the usearch output truncated at 280bp   
 #28227 OTUs, 62588 chimeras
@@ -173,11 +173,3 @@ qiime feature-classifier classify-sklearn \
 qiime metadata tabulate \
   --m-input-file rdu_16Staxonomy.qza \
   --o-visualization rdu_16Staxonomy.qzv
-  
-  
-  
-
-
-  
-  
-
