@@ -1,0 +1,2 @@
+sample-id	absolute-filepath
+OUT-rep-seqs	/mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/otus.fa
