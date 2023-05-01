@@ -168,8 +168,29 @@ qiime feature-classifier fit-classifier-naive-bayes
 qiime feature-classifier classify-sklearn \
   --i-classifier /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/Fastq/classifier.qza \
   --i-reads /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/usearch_outputs_repseqs.qza \
-  --o-classification rdu_16Staxonomy.qza
+  --o-classification taxonomy.qza
   
 qiime metadata tabulate \
-  --m-input-file rdu_16Staxonomy.qza \
-  --o-visualization rdu_16Staxonomy.qzv
+  --m-input-file taxonomy.qza \
+  --o-visualization taxonomy.qzv
+
+#In R use this command to make the taxonomy file into a csv 
+
+library(qiime2R)
+library(tidyverse)
+tax16S <- read_qza("taxonomy.qza")
+tax16S<-tax16S$data %>% as.tibble() %>%
+  mutate(Taxon=gsub("d__", "", Taxon)) %>% 
+  mutate(Taxon=gsub("p__", "", Taxon)) %>% 
+  mutate(Taxon=gsub("c__", "", Taxon)) %>% 
+  mutate(Taxon=gsub("o__", "", Taxon)) %>% 
+  mutate(Taxon=gsub("f__", "", Taxon)) %>% 
+  mutate(Taxon=gsub("g__", "", Taxon)) %>% 
+  mutate(Taxon=gsub("s__", "", Taxon)) %>% 
+  separate(Taxon, sep=";", c("Kingdom","Phylum","Class","Order","Family","Genus","Species"))%>%
+  mutate(Phylum=replace_na(Phylum,"empty"))
+
+write.csv(tax16S, file = "16S-taxonomy.csv", row.names =F)
+
+
+
