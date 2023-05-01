@@ -1,0 +1,183 @@
+
+module load Conda/3
+conda activate qiime2-2023.2
+cd RalieghSoilMicrobiomes
+
+#Importing demultiplexed sequences 
+tar -xvf MS463_Yougstead.tar
+qiime tools import      
+--type SampleData[PairedEndSeqencesWithQuality]  
+--input-path rdu_soil_manifest.txt  
+--input-format PairedEndFastqManifestPhred33V2  
+--output-path rdu_soil.qza
+#Looking at sequence quality to deterime truncation length  
+qiime demux summarize  
+--i-data rdu_soil.qza
+--o-visualization rdu_soil.qzv
+qiime tools view rdu_soil.qzv
+
+#trimming primers
+qiime cutadapt trim-paired 
+--i-demultiplexed-sequences rdu_soil.qza 
+--p-cores 4 
+--p-front-f TCGTCGGCAGCGTCAGATGTGTATAAGAGACAGCCTACGGGNGGCWGCAG 
+--p-front-r GTCTCGTGGGCTCGGAGATGTGTATAAGAGACAGGACTACHVGGGTATCTAATCC 
+--o-trimmed-sequences rdu_soil_No_Primers.qza
+qiime demux summarize  
+--i-data rdu_soil_No_Primers.qza  
+--o-visualization RDU_Soil_NoPrimers.qzv
+
+#PEAR is going to be used to merge sequences and see if that increases quality
+#!/bin/bash 
+cd /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/Fastq/
+samples=$(ls /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/Fastq/ | cut -d_ -f1 | sort | uniq) 
+for s in $samples; 
+do
+  pear -f ${s}_R1_001.fastq.gz -r ${s}_R2_001.fastq.gz -o /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/$s ; 
+done
+
+# concatenate the fastq
+cat *.assembled.fastq > assembled_and_concatenated.fastq
+# use fastqc to look at quality 
+conda activate fastqc
+for i in /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/RDU_Soil/Merged/*.assembled.fastq
+do
+fastqc -o /mnt/home/sowalass/RalieghSoilMicrobiomes/fastq_assembled/ $i 
+done 
+#Use USEARCh to truncate 
+#Use USEARCH to check ee of reads merged with PEAR before denoising
+/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 
+-fastq_eestats2 /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/rdu_merged_for_usearch.fastq 
+-length_cutoffs 100,500,1
+
+ 
+#Denoising data with different settings to maxamize read length and 
+
+/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 \
+		-fastq_filter /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/rdu_merged_for_usearch.fastq \
+		-fastq_maxee 1.0 \
+		-fastq_trunclen 280 \
+		-fastq_stripleft 15 \
+		-fastq_maxns 0 \
+		-fastqout /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_280bp_maxee_1.fastq
+
+/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 \
+		-fastq_filter /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/rdu_merged_for_usearch.fastq \
+		-fastq_maxee 0.5 \
+		-fastq_trunclen 280 \
+		-fastq_stripleft 15 \
+		-fastq_maxns 0 \
+		-fastqout /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_280bp_maxee_05.fastq
+		
+/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 \
+		-fastq_filter /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/rdu_merged_for_usearch.fastq \
+		-fastq_maxee 1.0 \
+		-fastq_trunclen 430 \
+		-fastq_stripleft 15 \
+		-fastq_maxns 0 \
+		-fastqout /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_430bp_maxee_1.fastq
+		
+		/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 \
+		-fastq_filter /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/rdu_merged_for_usearch.fastq \
+		-fastq_maxee 1.0 \
+		-fastq_trunclen 200 \
+		-fastq_stripleft 15 \
+		-fastq_maxns 0 \
+		-fastqout /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_200bp_maxee_1.fastq
+
+/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 \
+		-fastq_filter /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/rdu_merged_for_usearch.fastq \
+		-fastq_maxee 0.5 \
+		-fastq_trunclen 200 \
+		-fastq_stripleft 15 \
+		-fastq_maxns 0 \
+		-fastqout /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_200bp_maxee_05.fastq
+		
+
+#use fastqc to look at quality for each output
+module load Conda/3
+conda activate fastqc
+
+fastqc \
+		/mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_430bp_maxee_1.fastq \
+		/mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_280bp_maxee_05.fastq \
+		/mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_280bp_maxee_1.fastq \
+		--threads 15 \
+		--outdir /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/usearch_outputs_qc/
+		
+		fastqc \
+		/mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_200bp_maxee_05.fastq \
+		/mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_200bp_maxee_1.fastq \
+		--threads 15 \
+		--outdir /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/usearch_outputs_qc/
+    
+#looking at ee in each of these files, I only chose the two with the highest sequencing retention
+/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 
+-fastq_eestats2 /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_200bp_maxee_1.fastq -length_cutoffs 100,200,1 \
+/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 
+-fastq_eestats2 /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/filtered_280bp_maxee_1.fastq -length_cutoffs 100,200,1
+
+		
+#finding abundance of unique reads, I decided to use the usearch output truncated at 280bp   
+#28227 OTUs, 62588 chimeras
+cd /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/
+/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 
+-fastx_uniques filtered_280bp_maxee_1.fastq 
+-sizeout 
+-relabel Unique 
+-fastaout input_for_clustering.fa
+
+/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 
+-cluster_otus input_for_clustering.fa 
+-otus otus.fa 
+-relabel OTU
+
+#make otu table
+sed 's/ 1:N:0:/;sample=/g' rdu_merged_for_usearch.fastq 
+/mnt/research/rdp/public/thirdParty/usearch11.0.667_i86linux64 
+-otutab  /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/rdu_merged_for_usearch.fastq 
+-otus otus.fa 
+-otutabout otutable.txt 
+-mapout map.txt
+
+#importing otus to qiime 
+qiime tools import \
+  --input-path otus.fa \
+  --output-path usearch_outputs_repseqs.qza \
+  --type FeatureData[Sequence]
+  
+# view 
+qiime demux summarize \
+--i-data usearch_outputs_repseqs.qza \
+--o-visualization usearch_outputs_repseqs.qzv
+
+#Training classifier 
+cd /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/Fastq/
+qiime feature-classifier extract-reads 
+--i-sequences silva-138-99-seqs-515-806.qza 
+--p-f-primer GTGCCAGCMGCCGCGGTAA 
+--p-r-primer GGACTACHVGGGTWTCTAAT 
+--o-reads silva-138-99-extracts.qza 
+
+qiime feature-classifier fit-classifier-naive-bayes 
+--i-reference-reads silva-138-99-seqs-515-806.qza 
+--i-reference-taxonomy silva-138-99-tax-515-806.qza 
+--o-classifier classifier.qza
+
+#Assign taxonomy 
+qiime feature-classifier classify-sklearn \
+  --i-classifier /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/Fastq/classifier.qza \
+  --i-reads /mnt/ufs18/home-209/sowalass/RalieghSoilMicrobiomes/newseq/merged/usearch_outputs/usearch_outputs_repseqs.qza \
+  --o-classification rdu_16Staxonomy.qza
+  
+qiime metadata tabulate \
+  --m-input-file rdu_16Staxonomy.qza \
+  --o-visualization rdu_16Staxonomy.qzv
+  
+  
+  
+
+
+  
+  
+
